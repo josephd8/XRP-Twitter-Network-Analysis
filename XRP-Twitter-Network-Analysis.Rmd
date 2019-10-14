@@ -6,7 +6,283 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, include = FALSE)
+```
+
+```{r libraries, include=FALSE}
+library(vosonSML)
+library(sna)
+library(igraph)
+library(network)
+library(tidyverse)
+```
+
+# Data Collection
+
+```{r twitter_auth}
+# keys <- list(appName = "XRP", 
+#              apiKey = Sys.getenv("twitter_api_key"), 
+#              apiSecret = Sys.getenv("twitter_api_secret"), 
+#              accessToken = Sys.getenv("twitter_access_token"),
+#              accessTokenSecret = Sys.getenv("twitter_access_secret"))
+# 
+# twitterAuth <- Authenticate("twitter", appName = keys$appName, apiKey = keys$apiKey, 
+#                             apiSecret = keys$apiSecret, accessToken = keys$accessToken,
+#                             accessTokenSecret = keys$accessTokenSecret)
+
+#twitterAuth <- readRDS(".twitter_auth")
+```
+
+```{r twitter_search}
+#twittersearchTerm <- c('#XRP')
+
+# twitterData <- twitterAuth %>%
+#   Collect(searchTerm = twittersearchTerm, searchType = "recent", numTweets = 1100, 
+#           includeRetweets = TRUE , retryOnRateLimit = TRUE, writeToFile = FALSE, 
+#           verbose = TRUE)
+
+# View(twitterData)
+load("xrp_twitter_network.Rdata")
+```
+
+```{r actor_network}
+# actorNetwork <- twitterData %>% Create("actor")
+# actorGraph <- actorNetwork$graph
+```
+
+```{r clean_edges}
+edge_cleanup <- function(graph = actorGraph){
+  library(igraph)
+  df <- get.data.frame(actorGraph)
+  names_list <- data.frame('name' = as.character(V(actorGraph)$name),
+                           'label' = as.character(V(actorGraph)$label))
+  df$from <- sapply(df$from, function(x) names_list$label[match(x,names_list$name)] %>% as.character())
+  df$to <- sapply(df$to, function(x) names_list$label[match(x,names_list$name)] %>% as.character())
+  nodes <- data.frame(sort(unique(c(df$from,df$to))))
+  links <- df[,c('from','to')]
+  net <- graph.data.frame(links, nodes, directed=T)
+  E(net)$weight <- 1
+  net <- igraph::simplify(net,edge.attr.comb="sum")
+  return(net)
+}
+
+# actorGraph <- edge_cleanup()
+```
+
+```{r basic_network_stats}
+# check if the network is directed or undirected
+is.directed(actorGraph)
+
+########################
+# Check the criterion
+########################
+# check the size of the network
+vcount(actorGraph) ## the number of nodes/actors/users
+ecount(actorGraph) ## the number of edges
+
+possible_links <- vcount(actorGraph) * (vcount(actorGraph) - 1)
+
+# calculate the density of the network
+graph.density(actorGraph)
+```
+
+```{r save_network_data}
+save.image("xrp_twitter_network.Rdata")
+```
+
+### XRP Network
+
+XRP is a crypto-asset native to the XRP ledger. It is infamously tied to the company, Ripple, who owns a majority of XRP at the moment even though the ledger is open-source technology. Ripple and the larger XRP community have been making great strides at positioning XRP as the ultimate "bridge currency" for all other two-pair currency exchanges. Their vision is the "Internet of Value" where we will be able to send money/value back and forth similar to the way we share data on the internet. I am intrigued by the future of XRP and the XRP ledger, thus I wanted to analyze the #XRP hashtag to see if I could learn about the social network on Twitter.
+
+I chose the #XRP hashtag as I have seen it more often than any other related hashtag. While this is already a nascent industry with only a small comparative following I felt it was important to use the broadest, most well recognized hashtag. Also, whenever there are arguments about the advantages of XRP versus, say Bitcoin (BTC), those tweets usually involve the #XRP hashtag, so I am curious to see if I will capture any of that.
+
+Mostly, I am hoping to see if I can identify the major leaders of the "XRP Army" (a nickname for the XRP fanbase), as well as the most dedicated soldiers. I imagine that leaders will have some form of high degree-centrality, and top soliders/followers will have a high betweeness measure. Also, I am interested in the overall composition of the network and how disjointed or connected it is.
+
+### Basic Network Statistics
+
+The graph is `r if(is.directed(actorGraph)) paste0("directed") else paste0("undirected")`.  
+There are `r vcount(actorGraph)` nodes and `r ecount(actorGraph)` edges in this network.  
+There are 683,102 possible links in the network.  
+The density of this network is `r graph.density(actorGraph)`.  
+
+### Data Considerations
+
+If I wanted to look at a broader crypto network, I would want to use the #crypto hashtag. If I wanted to look at the other side of most crypto arguments (compared to the XRP Army), I would want to look at the #BTC (bitcoin) hashtag. By using the #XRP hashtag, I am boxing myself into somewhat of a narrow network, most-likely with similar nodes. Given the purpose of this analysis, this is ok.
+
+# Network Visualization
+
+```{r load_network_data}
+# load("xrp_twitter_network.Rdata")
+```
+
+### Full Network
+
+###### Force-directed Layout Algorithm
+
+```{r full_network_graph, include = TRUE}
+# Plot a graph
+actorGraph %>% 
+  plot(.,
+       layout = layout_with_fr(.),
+       edge.arrow.size = .3,
+       vertex.size = 7,
+       vertex.color = 'red',
+       vertex.label = NA, ## uncomment here if you don't want to display labels
+       vertex.label.cex = .5,
+       vertex.label.color = 'black')
+```
+
+```{r full_components}
+# Calculate the number of components in the graph
+comp <- components(actorGraph)
+comp$csize
+comp$no
+```
+
+The first observation I see is the giant component to the lower left of the graph with many smaller (and in many cases isolated) components in a moon shape around the top right of the graph. 
+
+Digging deeper, there are `r comp$no` different components (sizes below). The giant component contains 555 nodes, while `r length(which(comp$no == 1))` of the components are isolated and `r length(which(comp$no <= 3))` of the components contain 3 or less nodes.
+
+`r comp$csize`
+
+Even within the giant component though, there seems to be a few saturated groups similar to the 3 components of 12-17 nodes. My hypothesis is that there are roughly ~10 main conversations going on, likely started by major movers in the XRP space, and these conversations are then linked by a few nodes who are active across the whole space (high betweenness).
+
+
+### Giant Component
+
+###### Force-directed Layout Algorithm
+
+```{r giant_graph, include=TRUE}
+# Take out a giant component from the graph
+giantGraph <- actorGraph %>% 
+  induced.subgraph(., which(comp$membership == which.max(comp$csize)))
+#vcount(giantGraph) ## the number of nodes/actors/users
+#ecount(giantGraph) ## the number of edges
+
+# Plot a graph of giant component. (.) in layout gets the last data
+giantGraph %>% 
+  plot(.,
+       layout = layout_with_fr(.),
+       edge.arrow.size = .3,
+       vertex.size = 4,
+       vertex.color = 'red',
+       vertex.label = NA,
+       vertex.label.cex = .5,
+       vertex.label.color = 'black')
+```
+
+After separating out the giant component from the full network I was able to better visualize my hypothesis of multiple main conversations/head nodes. From this visualization I am able to account for ~10 "groups" centered around a single node. 
+
+This also gives better insight into the nodes on the periphery. There are multiple "spikes" coming from out of the center of the giant component. Interestingly, the arrows seem to be pointing outward as you move out for the most part. This seems to support my other hypthesis that there are some nodes with high betweeness that participate not only in the main conversations, but even connect and interact with non-influential nodes, thereby connecting them to the giant component.
+
+###### Simulated Annealing Algorithm + Node Weights by Degree
+
+```{r giant_graph_2, include=TRUE}
+# Experiment with other layouts by replacing with your choice of layout, then running a plot function above.
+# layout = layout_with_...(.)
+# For that, you can pick one of the options below.
+# layout_with_dh(.) # Davidson and Harel
+# layout_with_drl(.) # Force-directed
+# layout_with_kk(.) # Spring
+
+# You can play with the vertex sizes and/or edge sizes to get a better vizualization for the graphs above
+
+V(giantGraph)$vertex_degree <-  degree(giantGraph)
+
+giantGraph %>% 
+  plot(.,
+       layout = layout_with_dh(.),
+       edge.arrow.size = .1,
+       edge.curved = TRUE,
+       vertex.size = V(giantGraph)$vertex_degree,
+       vertex.color = grDevices::adjustcolor("#63B8FF", alpha=0.5),
+       vertex.label = NA)
+
+```
+
+I used the simulated annealing layout algorithm (layout_with_dh) for this visualization because it successfuly separating out the nodes with high degree in a way that I could visualize them easier. I also sized each node by it's degree, which allows us to see clearly that there are ~10 high-degree nodes in the giant component of this network. Also, there are ~50 nodes that have a degree high enough to substantiate on the visualization. Again, this visualization confirms my hypothesis of a few major nodes where the activities in the network are centered, with a slightly larger number of nodes acting as connectors for the network.
+
+# Individual Network Properties
+
+(8 points) Include the diagram for your chosen centrality measure from part 4 of the Individual Network Properties Instructions below, and also provide a table ranking the top 5-10 nodes for each centrality measure. Each centrality means (a) in-degree, (b) out-degree, (c) betweenness, (d) in-closeness, (e) out-closeness, (f) eigenvector, (g) Burt’s network constraint, (h) hub score, and (i) authority score.
+1.	(8 points) Briefly describe each centrality measure. How is each computed and what does its number mean in your network (e.g., a high centrality score means…)?
+2.	(4 points) How does the centrality of nodes vary with different types of centrality metrics? Why is this the case? Please offer some potential explanations using certain nodes as examples.
+
+```{r igraph_to_sna}
+sna_graph <- igraph::get.adjacency(giantGraph, sparse=FALSE) %>% network::as.network.matrix()
+detach('package:igraph')
+```
+
+```{r compute_centralities}
+# Compute centralities based on 'network' package
+# Calculate in-degree centrality
+degree(sna_graph, cmode = 'indegree')
+# Store the information
+centralities <- data.frame('node_name' = as.character(network.vertex.names(sna_graph)),
+                           'in_degree' = degree(sna_graph, cmode = 'indegree'))
+
+# Calculate out-degree centrality and store it in the data.frame called 'centralities'
+centralities$out_degree <- degree(sna_graph, cmode = 'outdegree')
+
+# Calculate betweenness centrality and store it in the data.frame called 'centralities'
+centralities$betweenness <- betweenness(sna_graph)
+
+# Calculate closeness centrality and store it in the data.frame called 'centralities'
+centralities$incloseness <- igraph::closeness(giantGraph, mode = 'in')
+centralities$outcloseness <- igraph::closeness(giantGraph, mode = 'out')
+
+# Calculate eigenvector centrality and store it in the data.frame called 'centralities'
+centralities$eigen <- evcent(sna_graph)
+
+# Calculate Burt's network constraint and store it in the data.frame called 'centralities'
+# using 'igraph' because 'sna' doesn't have the function
+centralities$netconstraint <- igraph::constraint(giantGraph)
+
+# Calculate authority and store it in the data.frame called 'centralities'
+# using 'igraph' because 'sna' doesn't have the function
+# 'igraph::' allows calling for any igraph function without loading the package
+centralities$authority <- igraph::authority_score(giantGraph, scale = TRUE)$`vector`
+
+# Calculate hub and store it in the data.frame called 'centralities'
+# using 'igraph' because 'sna' doesn't have the function
+centralities$hub <- igraph::hub_score(giantGraph, scale = TRUE)$`vector`
+
+#View(centralities)
+```
+
+```{r create_node_table}
+# For creating the table in part III you can use the following, replace eigen with other centrality measures that you want
+sort(centralities$eigen,decreasing=TRUE)[1:5]
+sort(centralities$authority,decreasing=TRUE)[1:5]
+```
+
+```{r target_diagram}
+# Produce a target diagram, centering by one of your choice of centralities (e.g., betweenness)
+# WARNING - below might take some time to produce it 
+# if you're running other tasks on your computer, make sure that your CPU has some space to run this plot
+sna::gplot.target(sna_graph, centralities$betweenness,
+                  displaylabels = FALSE, ## if you don't want to see labels, replace TRUE with FALSE
+                  label.cex=.5,
+                  main="Betweenness",
+                  # circ.lab = TRUE, 
+                  circ.col="skyblue",
+                  usearrows = TRUE,
+                  # vertex.col=c("blue", rep("red", 32), "yellow"),
+                  edge.col="darkgray")
+
 ```
 
 
+
+# Global Network
+
+1.	(3 points) Briefly describe (a) what k-core is, (b) what insight this k-core decomposition method provides, and (c) how many k’s exist in your network.
+2.	(3 points) Visualize your network using k-core decomposition and include the visualization in your report. In a paragraph, discuss your interpretation of the visualization and whether the results of k-core decomposition make sense based on your expectations of the network.
+3.	(3 points) Pick one of community detection algorithms. Which community detection algorithm did you choose and why?
+4.	(3 points) How many communities have been created? For your network, what might a community of nodes potentially have in common?
+5.	(3 points) What is a modularity score? Interpret the modularity score of your results of community detection?
+6.	(6 points) Plot the clusters and include the plot image in your report. What information does this layout convey? Are the clusters well-separated, or is there a great deal of overlap? What differences are there between actors in the same cluster and across clusters? Describe the brokers between any components and cliques.  What are common features of these brokers?
+7.	(3 points) Present and interpret the in- and out-degree distribution based on your network as well as a log-log plot. Compute and interpret the estimate of the c slope.
+8.	(3 points) Present in a plot the observed and simulated values for each average path length and clustering coefficient based on the original network and 1,000 randomly shuffled networks
+9.	(3 points) Based on these data would you conclude that the observed network demonstrates small world properties? If so, why? If not, why not?
+10.	(10 points) In two or three paragraphs, discuss your major findings of your network based on all the analyses you’ve done in this exercise and also your own additional analysis if necessary. Your answer here will be evaluated based on depth and comprehensiveness. Thus, you’re encouraged to utilize extra information to answer this question. For instance, you can take a look at your original data (i.e., “twitterData,” “youtubeData,” or “redditData” if you work with the provided R code) in R. These data frames include additional user, text, and time information for your network. Similarly, if you need more insights from your network, feel free to run correlation and regression analysis based on your data collection.
