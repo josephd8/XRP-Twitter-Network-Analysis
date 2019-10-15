@@ -86,11 +86,7 @@ possible_links <- vcount(actorGraph) * (vcount(actorGraph) - 1)
 graph.density(actorGraph)
 ```
 
-```{r save_network_data}
-save.image("xrp_twitter_network.Rdata")
-```
-
-### XRP Network
+## XRP Network
 
 XRP is a crypto-asset native to the XRP ledger. It is infamously tied to the company, Ripple, who owns a majority of XRP at the moment even though the ledger is open-source technology. Ripple and the larger XRP community have been making great strides at positioning XRP as the ultimate "bridge currency" for all other two-pair currency exchanges. Their vision is the "Internet of Value" where we will be able to send money/value back and forth similar to the way we share data on the internet. I am intrigued by the future of XRP and the XRP ledger, thus I wanted to analyze the #XRP hashtag to see if I could learn about the social network on Twitter.
 
@@ -98,14 +94,14 @@ I chose the #XRP hashtag as I have seen it more often than any other related has
 
 Mostly, I am hoping to see if I can identify the major leaders of the "XRP Army" (a nickname for the XRP fanbase), as well as the most dedicated soldiers. I imagine that leaders will have some form of high degree-centrality, and top soliders/followers will have a high betweeness measure. Also, I am interested in the overall composition of the network and how disjointed or connected it is.
 
-### Basic Network Statistics
+## Basic Network Statistics
 
 The graph is `r if(is.directed(actorGraph)) paste0("directed") else paste0("undirected")`.  
 There are `r vcount(actorGraph)` nodes and `r ecount(actorGraph)` edges in this network.  
 There are 683,102 possible links in the network.  
 The density of this network is `r graph.density(actorGraph)`.  
 
-### Data Considerations
+## Data Considerations
 
 If I wanted to look at a broader crypto network, I would want to use the #crypto hashtag. If I wanted to look at the other side of most crypto arguments (compared to the XRP Army), I would want to look at the #BTC (bitcoin) hashtag. By using the #XRP hashtag, I am boxing myself into somewhat of a narrow network, most-likely with similar nodes. Given the purpose of this analysis, this is ok.
 
@@ -115,9 +111,9 @@ If I wanted to look at a broader crypto network, I would want to use the #crypto
 # load("xrp_twitter_network.Rdata")
 ```
 
-### Full Network
+## Full Network
 
-###### Force-directed Layout Algorithm
+### Force-directed Layout Algorithm
 
 ```{r full_network_graph, include = TRUE}
 # Plot a graph
@@ -148,9 +144,9 @@ Digging deeper, there are `r comp$no` different components (sizes below). The gi
 Even within the giant component though, there seems to be a few saturated groups similar to the 3 components of 12-17 nodes. My hypothesis is that there are roughly ~10 main conversations going on, likely started by major movers in the XRP space, and these conversations are then linked by a few nodes who are active across the whole space (high betweenness).
 
 
-### Giant Component
+## Giant Component
 
-###### Force-directed Layout Algorithm
+### Force-directed Layout Algorithm
 
 ```{r giant_graph, include=TRUE}
 # Take out a giant component from the graph
@@ -175,7 +171,7 @@ After separating out the giant component from the full network I was able to bet
 
 This also gives better insight into the nodes on the periphery. There are multiple "spikes" coming from out of the center of the giant component. Interestingly, the arrows seem to be pointing outward as you move out for the most part. This seems to support my other hypthesis that there are some nodes with high betweeness that participate not only in the main conversations, but even connect and interact with non-influential nodes, thereby connecting them to the giant component.
 
-###### Simulated Annealing Algorithm + Node Weights by Degree
+### Simulated Annealing Algorithm + Node Weights by Degree
 
 ```{r giant_graph_2, include=TRUE}
 # Experiment with other layouts by replacing with your choice of layout, then running a plot function above.
@@ -189,7 +185,7 @@ This also gives better insight into the nodes on the periphery. There are multip
 
 V(giantGraph)$vertex_degree <-  degree(giantGraph)
 
-giantGraph %>% 
+giantGraph %>%
   plot(.,
        layout = layout_with_dh(.),
        edge.arrow.size = .1,
@@ -203,10 +199,6 @@ giantGraph %>%
 I used the simulated annealing layout algorithm (layout_with_dh) for this visualization because it successfuly separating out the nodes with high degree in a way that I could visualize them easier. I also sized each node by it's degree, which allows us to see clearly that there are ~10 high-degree nodes in the giant component of this network. Also, there are ~50 nodes that have a degree high enough to substantiate on the visualization. Again, this visualization confirms my hypothesis of a few major nodes where the activities in the network are centered, with a slightly larger number of nodes acting as connectors for the network.
 
 # Individual Network Properties
-
-(8 points) Include the diagram for your chosen centrality measure from part 4 of the Individual Network Properties Instructions below, and also provide a table ranking the top 5-10 nodes for each centrality measure. Each centrality means (a) in-degree, (b) out-degree, (c) betweenness, (d) in-closeness, (e) out-closeness, (f) eigenvector, (g) Burt’s network constraint, (h) hub score, and (i) authority score.
-1.	(8 points) Briefly describe each centrality measure. How is each computed and what does its number mean in your network (e.g., a high centrality score means…)?
-2.	(4 points) How does the centrality of nodes vary with different types of centrality metrics? Why is this the case? Please offer some potential explanations using certain nodes as examples.
 
 ```{r igraph_to_sna}
 sna_graph <- igraph::get.adjacency(giantGraph, sparse=FALSE) %>% network::as.network.matrix()
@@ -250,28 +242,71 @@ centralities$hub <- igraph::hub_score(giantGraph, scale = TRUE)$`vector`
 #View(centralities)
 ```
 
-```{r create_node_table}
-# For creating the table in part III you can use the following, replace eigen with other centrality measures that you want
-sort(centralities$eigen,decreasing=TRUE)[1:5]
-sort(centralities$authority,decreasing=TRUE)[1:5]
-```
+## Target Diagram - Betweenness
 
 ```{r target_diagram}
 # Produce a target diagram, centering by one of your choice of centralities (e.g., betweenness)
 # WARNING - below might take some time to produce it 
 # if you're running other tasks on your computer, make sure that your CPU has some space to run this plot
-sna::gplot.target(sna_graph, centralities$betweenness,
-                  displaylabels = FALSE, ## if you don't want to see labels, replace TRUE with FALSE
-                  label.cex=.5,
-                  main="Betweenness",
-                  # circ.lab = TRUE, 
-                  circ.col="skyblue",
-                  usearrows = TRUE,
-                  # vertex.col=c("blue", rep("red", 32), "yellow"),
-                  edge.col="darkgray")
+# sna::gplot.target(sna_graph, centralities$betweenness,
+#                   displaylabels = FALSE, ## if you don't want to see labels, replace TRUE with FALSE
+#                   label.cex=.5,
+#                   main="Betweenness",
+#                   # circ.lab = TRUE,
+#                   circ.col="skyblue",
+#                   usearrows = TRUE,
+#                   # vertex.col=c("blue", rep("red", 32), "yellow"),
+#                   edge.col="darkgray")
 
 ```
 
+## Centrality Ranks
+
+```{r create_node_table, include=TRUE}
+# For creating the table in part III you can use the following, replace eigen with other centrality measures that you want
+
+ranks <- data.frame("Rank" = 1:10)
+
+ranks <- ranks %>% 
+  mutate("In-degree" = centralities %>% arrange(desc(in_degree)) %>% head(10) %>% mutate("In-degree" = paste0(node_name, " (", round(in_degree,3), ")")) %>% pull("In-degree"),
+         "Out-degree" = centralities %>% arrange(desc(out_degree)) %>% head(10) %>% mutate("Out-degree" = paste0(node_name, " (", round(out_degree,3), ")")) %>% pull("Out-degree"),
+         "Betweenness" = centralities %>% arrange(desc(betweenness)) %>% head(10) %>% mutate("Betweenness" = paste0(node_name, " (", round(betweenness,3), ")")) %>% pull("Betweenness"),
+         "In-closeness" = centralities %>% arrange(desc(incloseness)) %>% head(10) %>% mutate("In-closeness" = paste0(node_name, " (", round(incloseness,8), ")")) %>% pull("In-closeness"),
+         "Out-closeness" = centralities %>% arrange(desc(outcloseness)) %>% head(10) %>% mutate("Out-closeness" = paste0(node_name, " (", round(outcloseness,8), ")")) %>% pull("Out-closeness"),
+         "Eigen" = centralities %>% arrange(desc(eigen)) %>% head(10) %>% mutate("Eigen" = paste0(node_name, " (", round(eigen,3), ")")) %>% pull("Eigen"),
+         "Net-constraint" = centralities %>% arrange(desc(netconstraint)) %>% head(10) %>% mutate("Net-constraint" = paste0(node_name, " (", round(netconstraint,3), ")")) %>% pull("Net-constraint"),
+         "Authority" = centralities %>% arrange(desc(authority)) %>% head(10) %>% mutate("Authority" = paste0(node_name, " (", round(authority,3), ")")) %>% pull("Authority"),
+         "Hub" = centralities %>% arrange(desc(hub)) %>% head(10) %>% mutate("Hub" = paste0(node_name, " (", round(hub,3), ")")) %>% pull("Hub"))
+
+knitr::kable(ranks[,c(1:5)])
+```
+
+```{r node_table_2, include=TRUE}
+knitr::kable(ranks[,c(1,6:9)])
+```
+
+```{r node_table_3, include=TRUE}
+knitr::kable(ranks[,c(1,10)])
+```
+
+## Discusson on Individual Network Properties
+
+##### Centrality Measures
+
+**In-degree:** The number of directional links to the node. In this scenario, it would be the number of nodes who replied or retweeted the node. A high in-degree signifies a central figure in the XRP community because the node is trusted enough to be responded to and retweeted.    
+**Out-degree:**  The number of directional links to other nodes. In this scenario, it would be the number of people this node replied to or retweeted. A high out-degree singals a figure who is active in the space more broadly and participates in more conversations.  
+**Betweenness:** The number of geodesic distances that pass through a node. A high betweenness score means the figure is a bridge between main conversations on Twitter. If you want to follow more conversations, follow these nodes.  
+**In-closeness:** Closeness measures how close a node is to the rest of the nodes in the network. Specifically, in-closeness corresponds to the ease of which a node can spread information anywhere in the network. In this analysis, a high in-closeness would be a figure who is at the center of the network and has been replied or retweeted in multiple different conversations.  
+**Out-closeness:** Out-closeness is the opposite, measuring how easy it is for a node to get information from the outside network. In this analysis, this would be a node that is plugged in to many different nodes in many different conversations.   
+**Eigenvector:** A function of a node's neighbors' centralities. A node in this scenario that has a high eigenvector centrality would be someone who is closely related to multiple high-degree nodes, and has some moderate level of degree themselves. These nodes are well integrated into the community.  
+**Burt's network constraint:** A measure of the extent to which a node's connections are circular, or connected with each other. Nodes with high constraint have difficulty getting access to new information because of their lack of outside connections. In this analysis, this would be a person that is only involved in one or two conversations and is unaware of outside activity.   
+**Authorities & Hubs:** Authorities contain useful information, and Hubs indicate where the autorities can be found. These two metrics are cacluated together. The authority score is proportional to the sum of hub scores pointing to it, while the hub score is proportional to the sum of authority scores it points to. In the XRP network, authorities should be the main sources of information, while hubs should be the main relayers of information.    
+
+##### Centrality in the XRP Network
+
+Looking across the centrality measures for the XRP Network, there are a few that don't seem to be great measures due to the sparse density of the network as a whole: in-closeness, out-closeness, net-constraint, and potentially authorities and hubs. It seems like in-degree, out-degree, betweenness, and eigenvector centrality are the richest measures of centality for this network.
+
+Kevin_Cage_ appears as the third-highest in-degree centrality. This node also appears second-highest in betweenness, and seventh in eigenvector centrality. Across all metrics, this appears to be of the the most central nodes. DigitalNomadInv is ninth in in-degree and first in both out-degree and betweenness. I would characterize Kevin_Cage_ as a highly influential node, and DigitalNomadInv as the highest broker in the network - connecting multiple players throughout. 
 
 
 # Global Network
@@ -286,3 +321,9 @@ sna::gplot.target(sna_graph, centralities$betweenness,
 8.	(3 points) Present in a plot the observed and simulated values for each average path length and clustering coefficient based on the original network and 1,000 randomly shuffled networks
 9.	(3 points) Based on these data would you conclude that the observed network demonstrates small world properties? If so, why? If not, why not?
 10.	(10 points) In two or three paragraphs, discuss your major findings of your network based on all the analyses you’ve done in this exercise and also your own additional analysis if necessary. Your answer here will be evaluated based on depth and comprehensiveness. Thus, you’re encouraged to utilize extra information to answer this question. For instance, you can take a look at your original data (i.e., “twitterData,” “youtubeData,” or “redditData” if you work with the provided R code) in R. These data frames include additional user, text, and time information for your network. Similarly, if you need more insights from your network, feel free to run correlation and regression analysis based on your data collection.
+
+
+```{r save_image}
+save.image('xrp_twitter_network.Rdata')
+```
+
