@@ -137,7 +137,7 @@ comp$no
 
 The first observation I see is the giant component to the lower left of the graph with many smaller (and in many cases isolated) components in a moon shape around the top right of the graph. 
 
-Digging deeper, there are `r comp$no` different components (sizes below). The giant component contains 555 nodes, while `r length(which(comp$no == 1))` of the components are isolated and `r length(which(comp$no <= 3))` of the components contain 3 or less nodes.
+Digging deeper, there are `r comp$no` different components (sizes below). The giant component contains `r max(comp$csize)` nodes, while `r length(which(comp$csize == 1))` of the components are isolated and `r length(which(comp$csize <= 3))` of the components contain 3 or less nodes.
 
 `r comp$csize`
 
@@ -244,19 +244,19 @@ centralities$hub <- igraph::hub_score(giantGraph, scale = TRUE)$`vector`
 
 ## Target Diagram - Betweenness
 
-```{r target_diagram}
+```{r target_diagram, include = TRUE}
 # Produce a target diagram, centering by one of your choice of centralities (e.g., betweenness)
 # WARNING - below might take some time to produce it 
 # if you're running other tasks on your computer, make sure that your CPU has some space to run this plot
-# sna::gplot.target(sna_graph, centralities$betweenness,
-#                   displaylabels = FALSE, ## if you don't want to see labels, replace TRUE with FALSE
-#                   label.cex=.5,
-#                   main="Betweenness",
-#                   # circ.lab = TRUE,
-#                   circ.col="skyblue",
-#                   usearrows = TRUE,
-#                   # vertex.col=c("blue", rep("red", 32), "yellow"),
-#                   edge.col="darkgray")
+sna::gplot.target(sna_graph, centralities$betweenness,
+                  displaylabels = FALSE, ## if you don't want to see labels, replace TRUE with FALSE
+                  label.cex=.5,
+                  main="Betweenness",
+                  # circ.lab = TRUE,
+                  circ.col="skyblue",
+                  usearrows = TRUE,
+                  # vertex.col=c("blue", rep("red", 32), "yellow"),
+                  edge.col="darkgray")
 
 ```
 
@@ -311,16 +311,220 @@ Kevin_Cage_ appears as the third-highest in-degree centrality. This node also ap
 
 # Global Network
 
-1.	(3 points) Briefly describe (a) what k-core is, (b) what insight this k-core decomposition method provides, and (c) how many k’s exist in your network.
-2.	(3 points) Visualize your network using k-core decomposition and include the visualization in your report. In a paragraph, discuss your interpretation of the visualization and whether the results of k-core decomposition make sense based on your expectations of the network.
-3.	(3 points) Pick one of community detection algorithms. Which community detection algorithm did you choose and why?
-4.	(3 points) How many communities have been created? For your network, what might a community of nodes potentially have in common?
-5.	(3 points) What is a modularity score? Interpret the modularity score of your results of community detection?
-6.	(6 points) Plot the clusters and include the plot image in your report. What information does this layout convey? Are the clusters well-separated, or is there a great deal of overlap? What differences are there between actors in the same cluster and across clusters? Describe the brokers between any components and cliques.  What are common features of these brokers?
-7.	(3 points) Present and interpret the in- and out-degree distribution based on your network as well as a log-log plot. Compute and interpret the estimate of the c slope.
-8.	(3 points) Present in a plot the observed and simulated values for each average path length and clustering coefficient based on the original network and 1,000 randomly shuffled networks
-9.	(3 points) Based on these data would you conclude that the observed network demonstrates small world properties? If so, why? If not, why not?
-10.	(10 points) In two or three paragraphs, discuss your major findings of your network based on all the analyses you’ve done in this exercise and also your own additional analysis if necessary. Your answer here will be evaluated based on depth and comprehensiveness. Thus, you’re encouraged to utilize extra information to answer this question. For instance, you can take a look at your original data (i.e., “twitterData,” “youtubeData,” or “redditData” if you work with the provided R code) in R. These data frames include additional user, text, and time information for your network. Similarly, if you need more insights from your network, feel free to run correlation and regression analysis based on your data collection.
+```{r detach_packages}
+detach('package:sna', unload = TRUE)
+detach('package:network', unload = TRUE)
+library(igraph)
+```
+
+## K-cores
+
+```{r kcores}
+kcore <- giantGraph %>% graph.coreness(.)
+kcore
+
+V(giantGraph)$vertex_degree <-  degree(giantGraph)
+
+table(kcore)
+```
+
+```{r kcores_viz, include = TRUE}
+giantGraph %>%
+  plot(.,
+       layout = layout_with_dh(.),
+       edge.arrow.size = .1,
+       edge.curved = TRUE,
+       vertex.size = V(giantGraph)$vertex_degree,
+       vertex.color = adjustcolor(graph.coreness(.), alpha.f = .3),
+       vertex.label = NA,
+       mark.groups = by(seq_along(graph.coreness(.)), graph.coreness(.), invisible),
+       mark.shape = 1/4,
+       mark.col = rainbow(length(unique(graph.coreness(.))),alpha = .1),
+       mark.border = NA)
+```
+
+A k-core is the max group of nodes that are all directly connected to "k" other nodes of the network. There are 3 cores in this network - sizes `r table(kcore)[1]`, `r table(kcore)[2]`, and `r table(kcore)[3]`, respectively. This shows that there are a lot of minor participants that are hopping into one conversation, making just one reply or retweet.
+
+I believe the k-core decomposition makes sense for this network. Only looking at 1000 tweets, you would only expect a handful of nodes to be more than just passerbys. The ~50 nodes in the 3-core are likely bigger activists or more passionate about XRP as a whole.
+
+## Communities, Modularity, and Clusters
+
+```{r communities}
+# Community detection: Plot the number of clusters in the graph and their size
+# there are also other algorithms for this you may want to explore
+# below is using Newman-Girvan Algorithm (2003)
+# if communities do not make sense to you, replace with your choice
+# e.g., cluster_infomap, cluster_walktrap etc.
+cluster <- giantGraph %>% cluster_edge_betweenness()
+cluster
+
+# modularity measure
+modularity <- modularity(cluster)
+
+# Find the number of clusters
+cluster_membership <- membership(cluster)   # affiliation list
+num_clusters <- length(cluster) # number of clusters
+
+# Find the size the each cluster 
+# Note that communities with one node are isolates, or have only a single tie
+cluster_sizes <- sizes(cluster) 
+```
+
+```{r communities_viz, include = TRUE}
+# Visualize clusters - that puts colored blobs around the nodes in the same community.
+# You may want to remove vertex.label=NA to figure out what terms are clustered.
+cluster %>% plot(.,giantGraph,
+                 # layout = layout_with_gem(.),
+                 layout = layout_nicely(giantGraph),
+                 edge.arrow.size = .3,
+                 edge.color = "lightgrey",
+                 edge.width = .2,
+                 vertex.size = V(giantGraph)$vertex_degree,
+                 vertex.color = adjustcolor(membership(.), alpha.f = .1),
+                 vertex.label = NA,
+                 mark.groups = by(seq_along(membership(.)), membership(.), invisible),
+                 mark.shape = 1/4,
+                 mark.col = rainbow(length(.),alpha = .1),
+                 mark.border = NA
+)
+```
+
+I chose to use the edge betweenness community detection algorithm because it is supposed to be ideal for communities which are densely connected to themselves but sparsely connected to others. This made the most sense to me given the network is Twitter activity. where specific conversations are had in threads (dense connection).
+
+`r num_clusters` communities were created. As mentioned, I think a community of nodes represents threads that a group of nodes gets involved in. There is not a high amount of crossover between threads as denoted by the lack of density in the network.
+
+The modularity of the network is `r modularity`. Modularity is on a spectrum from -1 to 1. This is on the higher end, although not super high. Modularity suggests dense connections within modules and sparse connections between modules. My hypothesis is that while there are sparse connections between modules, the connections within a module are next extremely dense, as a node does not often reply to all other nodes in a given thread on Twitter, just one or two.
+
+Now, turning my attention to the cluster visualization, there seems to be a large overlap between one cluster and many others. There are quite a few clusters of low-degree nodes as you move to the periphery of the network, and these are connected to the largest degree nodes by brokers who have a moderate level of degree and, I am assuming, a higher level of betweenness. Nodes in similar clusters seem to have a common broker node - I see this as a result of sub-threads within main threads on Twitter.
+
+## Degree Distributions
+
+##### In-Degree
+
+```{r degree_distributions, include = TRUE}
+# Examine the in-degree distribution
+giantGraph %>% degree.distribution(.,mode="in") %>% 
+  plot(., col = 'black', pch = 19, cex = 1.5,
+       main = 'In-degree Distribution',
+       ylab = 'Density',
+       xlab = 'In-degree')
+```
+
+```{r in_degree_loglog, include = TRUE}
+# CCDF - Complementary Cumulative Distribution Function
+# Plot a log-log plot of in-degree distribution
+giantGraph %>% 
+  degree.distribution(.,cumulative = TRUE,mode ='in') %>% 
+  plot(1:(max(degree(giantGraph,mode='in'))+1),., ## since log doesn't take 0, add 1 to every degree
+       log='xy', type = 'l',
+       main = 'Log-Log Plot of In-degree',
+       ylab = 'CCDF',
+       xlab = 'In-degree')
+```
+
+```{r in_degree_power_law}
+# Fit a power law to the degree distribution
+# The output of the power.law.fit() function tells us what the exponent of the power law is ($alpha)
+# and the log-likelihood of the parameters used to fit the power law distribution ($logLik)
+# Also, it performs a Kolmogov-Smirnov test to test whether the given degree distribution could have
+# been drawn from the fitted power law distribution.
+# The function thus gives us the test statistic ($KS.stat) and p-vaule ($KS.p) for that test
+in_power <- giantGraph %>% 
+  degree.distribution(., mode='in') %>%
+  power.law.fit(.)
+in_power
+```
+
+##### Out-Degree
+
+```{r out_degree_distribution, include = TRUE}
+# Examine the out-degree distribution
+giantGraph %>% degree.distribution(.,mode="out") %>% 
+  plot(., col = 'black', pch = 19, cex = 1.5,
+       main = 'Out-degree Distribution',
+       ylab = 'Density',
+       xlab = 'Out-degree')
+```
+
+```{r out_degree_loglog, include = TRUE}
+# Plot a log-log plot
+giantGraph %>% 
+  degree.distribution(.,cumulative = TRUE,mode ='out') %>% 
+  plot(1:(max(degree(giantGraph,mode='out'))+1), ## since log doesn't take 0, add 1 to every degree
+       ., log='xy', type = 'l',
+       main = 'Log-Log Plot of Out-degree',
+       ylab = 'CCDF',
+       xlab = 'Out-degree')
+```
+
+```{r out_degree_power_law}
+# Fit a power law to the degree distribution
+out_power <- giantGraph %>% 
+  degree.distribution(., mode='out') %>%
+  power.law.fit(.)
+out_power
+```
+
+##### Degree Summary
+
+**In-Degree C Slope:** `r -in_power$alpha`  
+**Out-Degree C Slope:** `r -out_power$alpha`
+
+According to Kolmogov-Smirnov tests, both the in-degree and out-degree distributions follow a power law distribution - meaning that a small portion of the nodes contain a large portion of both the in and out degrees. This make sense given the way that Twitter works. One major influencers makes a post, and then everyone else replies on the thread in a conversation, automatically creating an "in" connection to the influencer. The "rich-get-richer" paradigm is also at play, because the followers of nodes that reply or retweet the influencer get exposed to the influencer, which increases the likelihood that the influencer gets more connections. A lot of power law distributions we see in nature have a power of ~2, so these distributions are a bit less pronounced.
+
+## Small World Properties
+
+```{r small_world}
+# Small-world Characteristics
+ntrials <- 1000 ## set a value for the repetition
+cl.rg <- numeric(ntrials) ## create an estimated value holder for clustering coefficient
+apl.rg <- numeric(ntrials) ## create an estimated value holder for average path length
+for (i in (1:ntrials)) {
+  g.rg <- rewire(giantGraph, keeping_degseq(niter = 100))
+  cl.rg[i] <- transitivity(g.rg, type = 'average')
+  apl.rg[i] <- average.path.length(g.rg)
+}
+```
+
+```{r clustering_coef_hist, include = TRUE}
+# plot a histogram of simulated values for clustering coefficient + the observed value
+hist(cl.rg,
+     main = 'Histogram of Clustering Coefficient',
+     xlab = 'Clustering Coefficient')
+par(xpd = FALSE)
+# the line indicates the mean value of clustering coefficient for your network
+abline(v = giantGraph %>% transitivity(., type = 'average'), col = 'red', lty = 2)
+```
+
+```{r, clustering_coef_test}
+# this tests whether the observed value is statistically different from the simulated distribution
+t.test(cl.rg, mu=giantGraph %>% transitivity(., type = 'average'),
+       alternative = 'less') ##pick either 'less' or 'greater' based on your results
+```
+
+```{r avg_path_length_hist, include = TRUE}
+# plot a histogram of simulated values for average path length + the observed value
+hist(apl.rg,
+     main = 'Histogram of Average Path Length',
+     xlab = 'Average Path Length')
+# the line indicates the mean value of average path length for your network
+abline(v = giantGraph %>% average.path.length(), col = 'red', lty = 2)
+```
+
+```{r avg_path_length_test}
+# this tests whether the observed value is statistically different from the simulated distribution
+t.test(apl.rg, mu=giantGraph %>% average.path.length(.),
+       alternative = 'greater') ##pick either 'less' or 'greater' based on your results
+```
+
+
+According to the plots and the corresponding t-tests, the observed average clustering coefficient and the observed average path length are not different the randomly simulated data. Small world properties would signal a higher than normal clustering coefficent with a lower than normal average path length - this network does not demonstrate those properties.
+
+# Conclusions
+
+The XRP Network is growing. From a network perspective, there is a lot of growth stil to be had in connecting the ~300 nodes having conversations outside of the main compononent, as well as building greater density into the network as a whole, which would indicate more individual nodes becoming more active participants, thus creating more connections throughout the network. It was interesting to see the power law distributions of both in-degree and out-degree being less than 2. This suggests that there are the highest degree nodes share quite a bit of space in the network.
+
+One of the main goals of this analysis was to try and identify possible leaders in the XRP Army. These findings suggest that Kevin_Cage_, DigitalNomadInv, AlexCobb_, Adam_Kilpatrick, and AndrewNation13 are all worthy of the title "Captain". Looking forward, the key to this network is the nodes with high levels of betweenness, as they act as crucial brokers to fragmented parts of the network. Suprisingly, crypto adoption is largely a social pheonomenon at this point as more use cases get built. In order for the XRP community to continue to grow, these nodes will be responsible for the unifying of the community.
 
 
 ```{r save_image}
